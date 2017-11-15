@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 				count++;
 			}
 		}
-		uint16_t middle_val = (mid_value_avg / count) << 6;
+		uint16_t middle_val = (mid_value_avg / count) << 5;
 
 		const char *channel_comments[4] = {
 			"R",
