@@ -308,6 +308,8 @@ int main(int argc, char *argv[])
 				int gain = (middle_val*3) / avg;
 				if (gain > 255)
 					gain = 255;	//Clip as uint8_t
+				else if (gain < 32)
+					gain = 32;	//Clip at x1.0
 				fprintf(header, "%d, ", gain );
 			}
 			//Compute edge value from the very edge 2 pixels.
@@ -316,6 +318,8 @@ int main(int argc, char *argv[])
 				int gain = (middle_val*2) / avg;
 				if (gain > 255)
 					gain = 255;	//Clip as uint8_t
+				else if (gain < 32)
+					gain = 32;	//Clip at x1.0
 				fprintf(header, "%d,\n", gain );
 			}
 		}
