@@ -117,6 +117,11 @@ const int channel_ordering[4][4] = {
 	{ 1, 0, 3, 2 }
 };
 
+uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsigned int max_value)
+{
+	return ((raw_pixel - black_level) * max_value) / (max_value - black_level);
+}
+
 int main(int argc, char *argv[])
 {
 	int in = 0;
@@ -130,10 +135,11 @@ int main(int argc, char *argv[])
 	struct brcm_raw_header *hdr;
 	int width, height, stride;
 	int single_channel_width, single_channel_height;
+	unsigned int black_level = 16;
 
 	if (argc < 2)
 	{
-		printf("%s <input filename>\n", argv[0]);
+		printf("%s <input filename> [black level]\n", argv[0]);
 		return -1;
 	}
 
@@ -142,6 +148,10 @@ int main(int argc, char *argv[])
 	{
 		printf("Failed to open %s\n", argv[1]);
 		return -1;
+	}
+	if (argc >= 3)
+	{
+		black_level = strtoul(argv[2], NULL, 10);
 	}
 
 	fstat(in, &sb);
@@ -227,19 +237,19 @@ int main(int argc, char *argv[])
 		for (x=0; x<width; x+=4)
 		{
 			uint8_t lsbs = line[4];
-			*(chan_a_line) = ((*line)<<2) + (lsbs>>6);
+			*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
 			chan_a_line++;
 			lsbs<<=2;
 			line++;
-			*(chan_b_line) = ((*line)<<2) + (lsbs>>6);
+			*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
 			chan_b_line++;
 			lsbs<<=2;
 			line++;
-			*(chan_a_line) = ((*line)<<2) + (lsbs>>6);
+			*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
 			chan_a_line++;
 			lsbs<<=2;
 			line++;
-			*(chan_b_line) = ((*line)<<2) + (lsbs>>6);
+			*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
 			chan_b_line++;
 			lsbs<<=2;
 			line++;
