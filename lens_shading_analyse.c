@@ -125,7 +125,7 @@ uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsig
 int main(int argc, char *argv[])
 {
 	int in = 0;
-	FILE *out, *header, *table;
+	FILE *out, *header, *table, *bin;
 	int i, x, y;
 	uint16_t *out_buf[NUM_CHANNELS];
 	void *mmap_buf;
@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 	int bayer_order;
 	struct brcm_raw_header *hdr;
 	int width, height, stride;
-	int grid_width, grid_height;
+	uint32_t grid_width, grid_height;
 	int single_channel_width, single_channel_height;
 	unsigned int black_level = 0;
 
@@ -288,6 +288,11 @@ int main(int argc, char *argv[])
 
 	header = fopen("ls_table.h", "wb");
 	table = fopen("ls_table.txt", "wb");
+	bin =  fopen("ls.bin", "wb");
+	uint32_t transform = hdr->transform;
+	fwrite(&transform, sizeof(uint32_t), 1, bin);
+	fwrite(&grid_width, sizeof(uint32_t), 1, bin);
+	fwrite(&grid_height, sizeof(uint32_t), 1, bin);
 	fprintf(header, "uint8_t ls_grid[] = {\n");
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
@@ -358,6 +363,8 @@ int main(int argc, char *argv[])
 					gain = 32;  //Clip at x1.0
 				fprintf(header, "%d, ", gain );
 				fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
+				uint8_t gain_bin = gain;
+				fwrite(&gain_bin, sizeof(uint8_t), 1, bin);
 			}
 		}
 
