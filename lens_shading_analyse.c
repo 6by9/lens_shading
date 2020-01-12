@@ -134,6 +134,7 @@ int main(int argc, char *argv[])
 	int bayer_order;
 	struct brcm_raw_header *hdr;
 	int width, height, stride;
+	int grid_width, grid_height;
 	int single_channel_width, single_channel_height;
 	unsigned int black_level = 16;
 
@@ -208,6 +209,10 @@ int main(int argc, char *argv[])
 	height = hdr->height;
 	single_channel_width = width/2;
 	single_channel_height = height/2;
+	grid_width = single_channel_width / 32 + (single_channel_width % 32 == 0 ? 0 : 1);
+	grid_height = single_channel_height / 32 + (single_channel_height % 32 == 0 ? 0 : 1);
+	printf("Grid size: %d x %d\n", grid_width, grid_height);
+
 	//Stride computed via same formula as the firmware uses.
 	stride = (((((width + hdr->padding_right)*5)+3)>>2) + 31)&(~31);
 
@@ -340,8 +345,8 @@ int main(int argc, char *argv[])
 	}
 	fprintf(header, "};\n");
 	fprintf(header, "uint32_t ref_transform = %u;\n", hdr->transform);
-	fprintf(header, "uint32_t grid_width = %u;\n", (single_channel_width>>5)+1);
-	fprintf(header, "uint32_t grid_height = %u;\n", (single_channel_height>>5)+1);
+	fprintf(header, "uint32_t grid_width = %u;\n", grid_width);
+	fprintf(header, "uint32_t grid_height = %u;\n", grid_height);
 
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
