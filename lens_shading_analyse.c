@@ -125,7 +125,7 @@ uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsig
 int main(int argc, char *argv[])
 {
 	int in = 0;
-	FILE *out, *header;
+	FILE *out, *header, *table;
 	int i, x, y;
 	uint16_t *out_buf[NUM_CHANNELS];
 	void *mmap_buf;
@@ -260,6 +260,7 @@ int main(int argc, char *argv[])
 	printf("Save data. Bayer order is %d\n", bayer_order);
 
 	header = fopen("ls_table.h", "wb");
+	table = fopen("ls_table.txt", "wb");
 	fprintf(header, "uint8_t ls_grid[] = {\n");
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
@@ -321,6 +322,7 @@ int main(int argc, char *argv[])
 				else if (gain < 32)
 					gain = 32;	//Clip at x1.0
 				fprintf(header, "%d, ", gain );
+				fprintf(table, "%d %d %d %d\n", x, y, gain, i );
 			}
 			//Compute edge value from the very edge 2 pixels.
 			{
@@ -331,6 +333,7 @@ int main(int argc, char *argv[])
 				else if (gain < 32)
 					gain = 32;	//Clip at x1.0
 				fprintf(header, "%d,\n", gain );
+				fprintf(table, "%d %d %d %d\n", x, y, gain, i );
 			}
 		}
 

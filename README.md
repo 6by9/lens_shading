@@ -32,3 +32,13 @@ and
       vcsm_free(state.lens_shading);
 ```
 when finished.
+
+ls_table.txt is a comma separated file for easy visualization with Gnuplot. For a colored plot of all samples:
+```
+set palette defined (0 "red", 1 "yellow", 2 "magenta", 3 "blue")
+splot "ls_table.txt" using 1:2:3:4 w p ps 0.75 pt 7 lc palette z notitle
+```
+Single sample plot ($4==0 => red):
+```
+splot "ls_table.txt" using 1:2:($4==0?$3:1/0)
+```
