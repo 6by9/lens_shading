@@ -310,35 +310,32 @@ int main(int argc, char *argv[])
 
 		fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
 		uint16_t *line;
-		for (y=16; y<single_channel_height+32; y+=32)	//Grid size is 64x64, but the component tables are subsampled due to the Bayer pattern
+		for (y=0; y<grid_height; y++)
 		{
-			if (y>=single_channel_height)
-				line = &channel[(single_channel_height-1)*(single_channel_width)];
-			else
-				line = &channel[y*(single_channel_width)];
+			int y_start = y*32;
+			int y_stop  = y_start + 32 <= single_channel_height ? y_start + 32 : single_channel_height;
+			for (x=0; x<grid_width; x++)
+			{
+				int x_start = x*32;
+				int x_stop  = x_start + 32 <= single_channel_width ? x_start + 32 : single_channel_width;
 
-			for(x=16; x<single_channel_width; x+=32)
-			{
-				//Average 3 pixels horizontally to give some noise rejection
-				int avg = line[x] + line[x-1] + line[x+1];
-				int gain = (middle_val*3) / avg;
+				uint32_t block_sum = 0;
+				uint16_t block_px = 0;
+
+				for(int y_px = y_start; y_px < y_stop; y_px++){
+					line = &channel[y_px*(single_channel_width)];
+					for(int x_px = x_start; x_px < x_stop; x_px++){
+						block_sum += line[x_px];
+						block_px++;
+					}
+				}
+				int gain = (middle_val*block_px) / block_sum;
 				if (gain > 255)
-					gain = 255;	//Clip as uint8_t
+					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
-					gain = 32;	//Clip at x1.0
+					gain = 32;  //Clip at x1.0
 				fprintf(header, "%d, ", gain );
-				fprintf(table, "%d %d %d %d\n", x, y, gain, i );
-			}
-			//Compute edge value from the very edge 2 pixels.
-			{
-				int avg = line[single_channel_width-2] + line[single_channel_width-1];
-				int gain = (middle_val*2) / avg;
-				if (gain > 255)
-					gain = 255;	//Clip as uint8_t
-				else if (gain < 32)
-					gain = 32;	//Clip at x1.0
-				fprintf(header, "%d,\n", gain );
-				fprintf(table, "%d %d %d %d\n", x, y, gain, i );
+				fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
 			}
 		}
 
