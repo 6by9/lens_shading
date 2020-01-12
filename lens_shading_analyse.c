@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
 	int width, height, stride;
 	int grid_width, grid_height;
 	int single_channel_width, single_channel_height;
-	unsigned int black_level = 16;
+	unsigned int black_level = 0;
 
 	if (argc < 2)
 	{
@@ -193,6 +193,28 @@ int main(int argc, char *argv[])
 		printf("Raw file missing BRCM header\n");
 		goto unmap;
 	}
+
+	char model[ 7 ];
+	memcpy( model, &in_buf[ 16 ], 6 );
+	model[ 6 ] = '\0';
+	if (strncmp(model, "imx219", 6) == 0)
+	{
+		printf("Sensor type: %s\n", model);
+		if (black_level == 0)
+		{
+			black_level = 66;
+		}
+	} else if (strncmp(model, "ov5647", 6) == 0)
+	{
+		printf("Sensor type: %s\n", model);
+		if (black_level == 0)
+		{
+		black_level = 16;
+		}
+	}  else if (black_level == 0 ){
+		black_level = 16; // Default value
+	}
+	printf( "Black level: %d\n", black_level );
 
 	hdr = (struct brcm_raw_header*) (in_buf+0xB0);
 	printf("Header decoding: mode %s, width %u, height %u, padding %u %u\n",
