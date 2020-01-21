@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
 		printf("Sensor type: %s\n", model);
 		if (black_level == 0)
 		{
-		black_level = 16;
+			black_level = 16;
 		}
 	}  else if (black_level == 0 ){
 		black_level = 16; // Default value
