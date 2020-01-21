@@ -231,8 +231,8 @@ int main(int argc, char *argv[])
 	height = hdr->height;
 	single_channel_width = width/2;
 	single_channel_height = height/2;
-	grid_width = single_channel_width / 32 + (single_channel_width % 32 == 0 ? 0 : 1);
-	grid_height = single_channel_height / 32 + (single_channel_height % 32 == 0 ? 0 : 1);
+	grid_width = (single_channel_width + 31) / 32;
+	grid_height = (single_channel_height + 31) / 32;
 	printf("Grid size: %d x %d\n", grid_width, grid_height);
 
 	//Stride computed via same formula as the firmware uses.
