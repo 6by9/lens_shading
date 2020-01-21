@@ -316,27 +316,48 @@ int main(int argc, char *argv[])
 		uint16_t *channel = out_buf[channel_ordering[bayer_order][i]];
 		int mid_value_avg = 0;
 		int count = 0;
-		//Average out the centre 64 pixels.
-		for (x=(single_channel_width>>1)-4; x<=(single_channel_width>>1)+4; x++)
-		{
-			for (y=(single_channel_height>>1)-4; y<=(single_channel_height>>1)+4; y++)
-			{
-				mid_value_avg += channel[x + y*single_channel_width];
-				count++;
-			}
-		}
-		uint16_t middle_val = (mid_value_avg / count) << 5;
-
+		uint16_t *line;
 		const char *channel_comments[4] = {
 			"R",
 			"Gr",
 			"Gb",
 			"B"
-		};
-		printf("Middle_val is %d\n", middle_val);
+		};	
+		
+		// Search highest value
+		float max_val = 0;
+		for (y=0; y<grid_height; y++)
+		{
+			int y_start = y*32;
+			int y_stop  = y_start + 32 <= single_channel_height ? y_start + 32 : single_channel_height;
+			for (x=0; x<grid_width; x++)
+			{
+				int x_start = x*32;
+				int x_stop  = x_start + 32 <= single_channel_width ? x_start + 32 : single_channel_width;
 
+				float    block_val = 0;
+				uint16_t block_px = 0;
+
+				for(int y_px = y_start; y_px < y_stop; y_px++){
+					line = &channel[y_px*(single_channel_width)];
+					for(int x_px = x_start; x_px < x_stop; x_px++){
+						block_val += line[x_px];
+						block_px++;
+					}
+				}
+
+				block_val /= block_px;
+				if(block_val > max_val){
+					max_val = block_val;
+				}
+			}
+		}
+
+		max_val *= 32;
+		printf("Max_val is %.0f\n", max_val);
 		fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
-		uint16_t *line;
+
+		// Calculate gain for each block
 		for (y=0; y<grid_height; y++)
 		{
 			int y_start = y*32;
@@ -356,11 +377,11 @@ int main(int argc, char *argv[])
 						block_px++;
 					}
 				}
-				int gain = (middle_val*block_px) / block_sum;
+				int gain = (max_val*block_px) / block_sum + 0.5;
 				if (gain > 255)
 					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
-					gain = 32;  //Clip at x1.0
+					gain = 32;  //Clip at x1.0, should never happen
 				fprintf(header, "%d, ", gain );
 				fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
 				uint8_t gain_bin = gain;
