@@ -134,13 +134,15 @@ int main(int argc, char *argv[])
 	int bayer_order;
 	struct brcm_raw_header *hdr;
 	int width, height, stride;
-	uint32_t grid_width, grid_height;
+	uint32_t grid_width, grid_height, block_px_max;
 	int single_channel_width, single_channel_height;
 	unsigned int black_level = 0;
+	uint32_t *block_sum;
+	uint8_t block_size = 4;
 
 	if (argc < 2)
 	{
-		printf("%s <input filename> [black level]\n", argv[0]);
+		printf("%s <input filename> [black level] [avg square size]\n", argv[0]);
 		return -1;
 	}
 
@@ -153,6 +155,17 @@ int main(int argc, char *argv[])
 	if (argc >= 3)
 	{
 		black_level = strtoul(argv[2], NULL, 10);
+	}
+	if (argc >= 4)
+	{
+		block_size = strtoul(argv[3], NULL, 10);
+		if (block_size<=0 || block_size>32) {
+			printf("Length of the square for calculation must be between 2 and 32 in size and a multiple of 2\n");
+			return -1;
+		} else if (block_size%2 == 1)
+		{
+			block_size++;
+		}
 	}
 
 	fstat(in, &sb);
@@ -233,6 +246,8 @@ int main(int argc, char *argv[])
 	single_channel_height = height/2;
 	grid_width = (single_channel_width + 31) / 32;
 	grid_height = (single_channel_height + 31) / 32;
+	block_px_max = block_size*block_size;
+	block_sum = (uint32_t *)malloc(sizeof(uint32_t) * grid_width * grid_height);
 	printf("Grid size: %d x %d\n", grid_width, grid_height);
 
 	//Stride computed via same formula as the firmware uses.
@@ -324,18 +339,28 @@ int main(int argc, char *argv[])
 			"B"
 		};	
 		
-		// Search highest value
-		float max_val = 0;
+		// Calculate sum for each block
+		uint16_t block_idx = 0;
+		uint32_t max_val = 0;
 		for (y=0; y<grid_height; y++)
 		{
-			int y_start = y*32;
-			int y_stop  = y_start + 32 <= single_channel_height ? y_start + 32 : single_channel_height;
+			int y_start = y*32+16-block_size/2;
+			if (y_start >= single_channel_height)
+				y_start = single_channel_height-1;
+			int y_stop  = y_start+block_size;
+			if (y_stop > single_channel_height)
+				y_stop = single_channel_height;
+
 			for (x=0; x<grid_width; x++)
 			{
-				int x_start = x*32;
-				int x_stop  = x_start + 32 <= single_channel_width ? x_start + 32 : single_channel_width;
+				int x_start = x*32+16-block_size/2;
+				if (x_start >= single_channel_width)
+					x_start = single_channel_width-1;
+				int x_stop  = x_start+block_size;
+				if (x_stop > single_channel_width)
+					x_stop = single_channel_width;
 
-				float    block_val = 0;
+				uint32_t block_val = 0;
 				uint16_t block_px = 0;
 
 				for(int y_px = y_start; y_px < y_stop; y_px++){
@@ -345,39 +370,26 @@ int main(int argc, char *argv[])
 						block_px++;
 					}
 				}
+				if (block_px < block_px_max)
+					block_val = block_val * block_px_max / block_px; // Scale sum in case of small edge blocks
 
-				block_val /= block_px;
-				if(block_val > max_val){
+				block_sum[block_idx++] =  block_val;
+				if (block_val > max_val)
 					max_val = block_val;
-				}
 			}
 		}
 
-		max_val *= 32;
-		printf("Max_val is %.0f\n", max_val);
+		max_val <<= 5;
+		printf("Max_val is %d\n", max_val);
 		fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
 
 		// Calculate gain for each block
+		block_idx = 0;
 		for (y=0; y<grid_height; y++)
 		{
-			int y_start = y*32;
-			int y_stop  = y_start + 32 <= single_channel_height ? y_start + 32 : single_channel_height;
 			for (x=0; x<grid_width; x++)
 			{
-				int x_start = x*32;
-				int x_stop  = x_start + 32 <= single_channel_width ? x_start + 32 : single_channel_width;
-
-				uint32_t block_sum = 0;
-				uint16_t block_px = 0;
-
-				for(int y_px = y_start; y_px < y_stop; y_px++){
-					line = &channel[y_px*(single_channel_width)];
-					for(int x_px = x_start; x_px < x_stop; x_px++){
-						block_sum += line[x_px];
-						block_px++;
-					}
-				}
-				int gain = (max_val*block_px) / block_sum + 0.5;
+				int gain = max_val / block_sum[block_idx++] + 0.5;
 				if (gain > 255)
 					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
