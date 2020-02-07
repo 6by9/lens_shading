@@ -122,6 +122,24 @@ uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsig
 	return ((raw_pixel - black_level) * max_value) / (max_value - black_level);
 }
 
+void print_help( void )
+{
+	printf( "\n" );
+	printf( "\n" );
+	printf( "\"lens_shading_analyse\" Lens shading analysis tool\n" );
+	printf( "\n" );
+	printf( "Analyzes the lens shading based on a raw image\n" );
+	printf( "\n" );
+	printf( "usage: lens_shading_analyse -i <filename> [options]\n" );
+	printf( "\n" );
+	printf( "Parameters\n" );
+	printf( "\n" );
+	printf( "-i  : Raw image file (mandatory)\n" );
+	printf( "-b  : Black level\n" );
+	printf( "-s  : Size of the analysis cell. Minimum 2, maximum 32, default 4\n" );
+	printf( "\n" );
+}
+
 int main(int argc, char *argv[])
 {
 	int in = 0;
@@ -142,29 +160,42 @@ int main(int argc, char *argv[])
 
 	if (argc < 2)
 	{
-		printf("%s <input filename> [black level] [avg square size]\n", argv[0]);
+		print_help();
 		return -1;
 	}
 
-	in = open(argv[1], O_RDONLY);
-	if (in < 0)
+	int nArg;
+	while ((nArg = getopt(argc, argv, "b:i:s:")) != -1)
 	{
-		printf("Failed to open %s\n", argv[1]);
-		return -1;
-	}
-	if (argc >= 3)
-	{
-		black_level = strtoul(argv[2], NULL, 10);
-	}
-	if (argc >= 4)
-	{
-		block_size = strtoul(argv[3], NULL, 10);
-		if (block_size<=0 || block_size>32) {
-			printf("Length of the square for calculation must be between 2 and 32 in size and a multiple of 2\n");
+		switch( nArg ) {
+		case 'b':
+			black_level = strtoul(optarg, NULL, 10);
+			break;
+		case 'i':
+			in = open(optarg, O_RDONLY);
+			if (in < 0)
+			{
+				printf("Failed to open %s\n", argv[1]);
+				return -1;
+			}
+			break;
+		case 's':
+			block_size = strtoul(optarg, NULL, 10);
+			if (block_size<=0 || block_size>32)
+			{
+				printf("Analysis cell out of range\n");
+				return -1;
+			}
+			else if (block_size%2 == 1)
+			{
+				block_size++;
+			}
+			break;
+		default:
+		case 'h':
+			print_help();
 			return -1;
-		} else if (block_size%2 == 1)
-		{
-			block_size++;
+			break;
 		}
 	}
 
