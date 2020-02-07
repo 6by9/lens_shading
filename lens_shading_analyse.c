@@ -137,6 +137,11 @@ void print_help( void )
 	printf( "-i  : Raw image file (mandatory)\n" );
 	printf( "-b  : Black level\n" );
 	printf( "-s  : Size of the analysis cell. Minimum 2, maximum 32, default 4\n" );
+	printf( "-o  : Output format. Formats can be output together, for example 3 = 1 + 2\n" );
+	printf( "      1  : Header file (default on)\n" );
+	printf( "      2  : Binary file\n" );
+	printf( "      4  : Text file\n" );
+	printf( "      8  : Channel data\n" );
 	printf( "\n" );
 }
 
@@ -157,6 +162,7 @@ int main(int argc, char *argv[])
 	unsigned int black_level = 0;
 	uint32_t *block_sum;
 	uint8_t block_size = 4;
+	uint8_t out_frmt = 1;
 
 	if (argc < 2)
 	{
@@ -165,7 +171,7 @@ int main(int argc, char *argv[])
 	}
 
 	int nArg;
-	while ((nArg = getopt(argc, argv, "b:i:s:")) != -1)
+	while ((nArg = getopt(argc, argv, "b:i:o:s:")) != -1)
 	{
 		switch( nArg ) {
 		case 'b':
@@ -176,6 +182,14 @@ int main(int argc, char *argv[])
 			if (in < 0)
 			{
 				printf("Failed to open %s\n", argv[1]);
+				return -1;
+			}
+			break;
+		case 'o':
+			out_frmt = strtoul(optarg, NULL, 10);
+			if (!out_frmt & 0x0F)
+			{
+				printf("Invalid output format\n");
 				return -1;
 			}
 			break;
@@ -332,30 +346,48 @@ int main(int argc, char *argv[])
 
 	printf("Save data. Bayer order is %d\n", bayer_order);
 
-	header = fopen("ls_table.h", "wb");
-	table = fopen("ls_table.txt", "wb");
-	bin =  fopen("ls.bin", "wb");
-	uint32_t transform = hdr->transform;
-	fwrite(&transform, sizeof(uint32_t), 1, bin);
-	fwrite(&grid_width, sizeof(uint32_t), 1, bin);
-	fwrite(&grid_height, sizeof(uint32_t), 1, bin);
-	fprintf(header, "uint8_t ls_grid[] = {\n");
+	if(out_frmt&0x01)
+	{
+		header = fopen("ls_table.h", "wb");
+	}
+	if(out_frmt&0x02)
+	{
+		bin =  fopen("ls.bin", "wb");
+	}
+	if(out_frmt&0x04)
+	{
+		table = fopen("ls_table.txt", "wb");
+	}
+	if(out_frmt&0x01)
+	{
+		fprintf(header, "uint8_t ls_grid[] = {\n");
+	}
+	if(out_frmt&0x02)
+	{
+		uint32_t transform = hdr->transform;
+		fwrite(&transform, sizeof(uint32_t), 1, bin);
+		fwrite(&grid_width, sizeof(uint32_t), 1, bin);
+		fwrite(&grid_height, sizeof(uint32_t), 1, bin);
+	}
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
-		// Write out the raw data for analysis
-		const char *filenames[NUM_CHANNELS] = {
-			"ch1.bin",
-			"ch2.bin",
-			"ch3.bin",
-			"ch4.bin"
-		};
-		out = fopen(filenames[i], "wb");
-		if (out)
+		if(out_frmt&0x08)
 		{
-			printf("Saving %s data\n", filenames[i]);
-			fwrite(out_buf[i], (single_channel_width*single_channel_height)*sizeof(uint16_t), 1, out);
-			fclose(out);
-			out = NULL;
+			// Write out the raw data for analysis
+			const char *filenames[NUM_CHANNELS] = {
+				"ch1.bin",
+				"ch2.bin",
+				"ch3.bin",
+				"ch4.bin"
+			};
+			out = fopen(filenames[i], "wb");
+			if (out)
+			{
+				printf("Saving %s data\n", filenames[i]);
+				fwrite(out_buf[i], (single_channel_width*single_channel_height)*sizeof(uint16_t), 1, out);
+				fclose(out);
+				out = NULL;
+			}
 		}
 
 		//Write out the lens shading table in the order RGGB
@@ -412,7 +444,10 @@ int main(int argc, char *argv[])
 
 		max_val <<= 5;
 		printf("Max_val is %d\n", max_val);
-		fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
+		if(out_frmt&0x01)
+		{
+			fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
+		}
 
 		// Calculate gain for each block
 		block_idx = 0;
@@ -425,18 +460,30 @@ int main(int argc, char *argv[])
 					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
 					gain = 32;  //Clip at x1.0, should never happen
-				fprintf(header, "%d, ", gain );
-				fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
-				uint8_t gain_bin = gain;
-				fwrite(&gain_bin, sizeof(uint8_t), 1, bin);
+				if(out_frmt&0x01)
+				{
+					fprintf(header, "%d, ", gain );
+				}
+				if(out_frmt&0x02)
+				{
+					uint8_t gain_bin = gain;
+					fwrite(&gain_bin, sizeof(uint8_t), 1, bin);
+				}
+				if(out_frmt&0x04)
+				{
+					fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
+				}
 			}
 		}
 
 	}
-	fprintf(header, "};\n");
-	fprintf(header, "uint32_t ref_transform = %u;\n", hdr->transform);
-	fprintf(header, "uint32_t grid_width = %u;\n", grid_width);
-	fprintf(header, "uint32_t grid_height = %u;\n", grid_height);
+	if(out_frmt&0x01)
+	{
+		fprintf(header, "};\n");
+		fprintf(header, "uint32_t ref_transform = %u;\n", hdr->transform);
+		fprintf(header, "uint32_t grid_width = %u;\n", grid_width);
+		fprintf(header, "uint32_t grid_height = %u;\n", grid_height);
+	}
 
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
