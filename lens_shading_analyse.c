@@ -122,27 +122,27 @@ uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsig
 	return ((raw_pixel - black_level) * max_value) / (max_value - black_level);
 }
 
-void print_help( void )
+void print_help(void)
 {
-	printf( "\n" );
-	printf( "\n" );
-	printf( "\"lens_shading_analyse\" Lens shading analysis tool\n" );
-	printf( "\n" );
-	printf( "Analyzes the lens shading based on a raw image\n" );
-	printf( "\n" );
-	printf( "usage: lens_shading_analyse -i <filename> [options]\n" );
-	printf( "\n" );
-	printf( "Parameters\n" );
-	printf( "\n" );
-	printf( "-i  : Raw image file (mandatory)\n" );
-	printf( "-b  : Black level\n" );
-	printf( "-s  : Size of the analysis cell. Minimum 2, maximum 32, default 4\n" );
-	printf( "-o  : Output format. Formats can be output together, for example 3 = 1 + 2\n" );
-	printf( "      1  : Header file (default on)\n" );
-	printf( "      2  : Binary file\n" );
-	printf( "      4  : Text file\n" );
-	printf( "      8  : Channel data\n" );
-	printf( "\n" );
+	printf("\n");
+	printf("\n");
+	printf("\"lens_shading_analyse\" Lens shading analysis tool\n");
+	printf("\n");
+	printf("Analyzes the lens shading based on a raw image\n");
+	printf("\n");
+	printf("usage: lens_shading_analyse -i <filename> [options]\n");
+	printf("\n");
+	printf("Parameters\n");
+	printf("\n");
+	printf("-i  : Raw image file (mandatory)\n");
+	printf("-b  : Black level\n");
+	printf("-s  : Size of the analysis cell. Minimum 2, maximum 32, default 4\n");
+	printf("-o  : Output format. Formats can be output together, for example 3 = 1 + 2\n");
+	printf("      1  : Header file (default on)\n");
+	printf("      2  : Binary file\n");
+	printf("      4  : Text file\n");
+	printf("      8  : Channel data\n");
+	printf("\n");
 }
 
 int main(int argc, char *argv[])
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
 	int nArg;
 	while ((nArg = getopt(argc, argv, "b:i:o:s:")) != -1)
 	{
-		switch( nArg ) {
+		switch (nArg) {
 		case 'b':
 			black_level = strtoul(optarg, NULL, 10);
 			break;
@@ -252,9 +252,9 @@ int main(int argc, char *argv[])
 		goto unmap;
 	}
 
-	char model[ 7 ];
-	memcpy( model, &in_buf[ 16 ], 6 );
-	model[ 6 ] = '\0';
+	char model[7];
+	memcpy(model, &in_buf[16], 6);
+	model[6] = '\0';
 	if (strncmp(model, "imx219", 6) == 0)
 	{
 		printf("Sensor type: %s\n", model);
@@ -269,10 +269,10 @@ int main(int argc, char *argv[])
 		{
 			black_level = 16;
 		}
-	}  else if (black_level == 0 ){
+	}  else if (black_level == 0){
 		black_level = 16; // Default value
 	}
-	printf( "Black level: %d\n", black_level );
+	printf("Black level: %d\n", black_level);
 
 	hdr = (struct brcm_raw_header*) (in_buf+0xB0);
 	printf("Header decoding: mode %s, width %u, height %u, padding %u %u\n",
