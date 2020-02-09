@@ -346,23 +346,23 @@ int main(int argc, char *argv[])
 
 	printf("Save data. Bayer order is %d\n", bayer_order);
 
-	if(out_frmt&0x01)
+	if (out_frmt&0x01)
 	{
 		header = fopen("ls_table.h", "wb");
 	}
-	if(out_frmt&0x02)
+	if (out_frmt&0x02)
 	{
 		bin =  fopen("ls.bin", "wb");
 	}
-	if(out_frmt&0x04)
+	if (out_frmt&0x04)
 	{
 		table = fopen("ls_table.txt", "wb");
 	}
-	if(out_frmt&0x01)
+	if (out_frmt&0x01)
 	{
 		fprintf(header, "uint8_t ls_grid[] = {\n");
 	}
-	if(out_frmt&0x02)
+	if (out_frmt&0x02)
 	{
 		uint32_t transform = hdr->transform;
 		fwrite(&transform, sizeof(uint32_t), 1, bin);
@@ -371,7 +371,7 @@ int main(int argc, char *argv[])
 	}
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
-		if(out_frmt&0x08)
+		if (out_frmt&0x08)
 		{
 			// Write out the raw data for analysis
 			const char *filenames[NUM_CHANNELS] = {
@@ -426,9 +426,9 @@ int main(int argc, char *argv[])
 				uint32_t block_val = 0;
 				uint16_t block_px = 0;
 
-				for(int y_px = y_start; y_px < y_stop; y_px++){
+				for (int y_px = y_start; y_px < y_stop; y_px++){
 					line = &channel[y_px*(single_channel_width)];
-					for(int x_px = x_start; x_px < x_stop; x_px++){
+					for (int x_px = x_start; x_px < x_stop; x_px++){
 						block_val += line[x_px];
 						block_px++;
 					}
@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
 
 		max_val <<= 5;
 		printf("Max_val is %d\n", max_val);
-		if(out_frmt&0x01)
+		if (out_frmt&0x01)
 		{
 			fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
 		}
@@ -460,24 +460,24 @@ int main(int argc, char *argv[])
 					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
 					gain = 32;  //Clip at x1.0, should never happen
-				if(out_frmt&0x01)
+				if (out_frmt&0x01)
 				{
-					fprintf(header, "%d, ", gain );
+					fprintf(header, "%d, ", gain);
 				}
-				if(out_frmt&0x02)
+				if (out_frmt&0x02)
 				{
 					uint8_t gain_bin = gain;
 					fwrite(&gain_bin, sizeof(uint8_t), 1, bin);
 				}
-				if(out_frmt&0x04)
+				if (out_frmt&0x04)
 				{
-					fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i );
+					fprintf(table, "%d %d %d %d\n", x * 32 + 16, y * 32 + 16, gain, i);
 				}
 			}
 		}
 
 	}
-	if(out_frmt&0x01)
+	if (out_frmt&0x01)
 	{
 		fprintf(header, "};\n");
 		fprintf(header, "uint32_t ref_transform = %u;\n", hdr->transform);
