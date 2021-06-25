@@ -102,6 +102,7 @@ struct brcm_raw_header {
 //Values taken from https://github.com/raspberrypi/userland/blob/master/interface/vctypes/vc_image_types.h
 #define BRCM_FORMAT_BAYER  33
 #define BRCM_BAYER_RAW10   3
+#define BRCM_BAYER_RAW12   4
 
 enum bayer_order_t {
 	RGGB,
@@ -116,6 +117,35 @@ const int channel_ordering[4][4] = {
 	{ 3, 2, 1, 0 },
 	{ 1, 0, 3, 2 }
 };
+
+uint8_t* sensor_model_check(int sensor_model, void* buffer, size_t size)
+{
+		uint8_t* in_buf = 0;
+
+		switch(sensor_model) {
+		case 1:
+			in_buf = ((uint8_t*)buffer) + size - 6404096;
+			break;
+		case 2:
+			in_buf = ((uint8_t*)buffer) + size - 10270208;
+			break;
+		case 3:
+			in_buf = ((uint8_t*)buffer) + size - 18711040;
+			break;
+		default:
+			return 0;
+			break;
+		}
+
+		if (memcmp(in_buf, "BRCM", 4) == 0)
+		{
+			return in_buf;
+		}
+		else
+		{
+			return 0;
+		}
+}
 
 uint16_t black_level_correct(uint16_t raw_pixel, unsigned int black_level, unsigned int max_value)
 {
@@ -151,9 +181,11 @@ int main(int argc, char *argv[])
 	FILE *out, *header, *table, *bin;
 	int i, x, y;
 	uint16_t *out_buf[NUM_CHANNELS];
+	uint16_t max_val;
 	void *mmap_buf;
 	uint8_t *in_buf;
 	struct stat sb;
+	int bits_per_sample;
 	int bayer_order;
 	struct brcm_raw_header *hdr;
 	int width, height, stride;
@@ -225,20 +257,16 @@ int main(int argc, char *argv[])
 
 	if (!memcmp(mmap_buf, "\xff\xd8", 2))
 	{
-		//JPEG+RAW - find the raw header
-		//Try the appropriate offsets for the full res modes
-		//of OV5647 and IMX219. Any other modes will need to be
-		//stripped down to the bare raw (inc header) before processing
-		in_buf = ((uint8_t*)mmap_buf) + sb.st_size - 6404096;
-		if (memcmp(in_buf, "BRCM", 4))
+		int sensor_model = 1;
+		do
 		{
-			//Failed on OV5647, try IMX219
-			in_buf = ((uint8_t*)mmap_buf) + sb.st_size - 10270208;
-			if (memcmp(in_buf, "BRCM", 4))
-			{
-				//Failed totally - reset to the start of the buffer
-				in_buf = (uint8_t*)mmap_buf;
-			}
+			in_buf = sensor_model_check(sensor_model, mmap_buf, sb.st_size);
+		}
+		while(in_buf == 0 && sensor_model++ <= 3);
+
+		if (in_buf == 0)
+		{
+			in_buf = (uint8_t*)mmap_buf;
 		}
 	}
 	else
@@ -260,16 +288,28 @@ int main(int argc, char *argv[])
 		printf("Sensor type: %s\n", model);
 		if (black_level == 0)
 		{
-			black_level = 66;
+			black_level = 64;
 		}
-	} else if (strncmp(model, "ov5647", 6) == 0)
+	}
+	else if (strncmp(model, "ov5647", 6) == 0)
 	{
 		printf("Sensor type: %s\n", model);
 		if (black_level == 0)
 		{
 			black_level = 16;
 		}
-	}  else if (black_level == 0){
+	}
+	else if (strncmp(model, "testc", 6) == 0 ||
+				strncmp(model, "imx477", 6) == 0)
+	{
+		printf("Sensor type: %s\n", model);
+		if (black_level == 0)
+		{
+			black_level = 257;
+		}
+	}
+	else if (black_level == 0)
+	{
 		black_level = 16; // Default value
 	}
 	printf("Black level: %d\n", black_level);
@@ -279,12 +319,15 @@ int main(int argc, char *argv[])
 			hdr->name, hdr->width, hdr->height, hdr->padding_right, hdr->padding_down);
 	printf("transform %u, image format %u, bayer order %u, bayer format %u\n",
 			hdr->transform, hdr->format, hdr->bayer_order, hdr->bayer_format);
-	if (hdr->format != BRCM_FORMAT_BAYER || hdr->bayer_format != BRCM_BAYER_RAW10)
+	if (hdr->format != BRCM_FORMAT_BAYER ||
+			(hdr->bayer_format != BRCM_BAYER_RAW10 && hdr->bayer_format != BRCM_BAYER_RAW12))
 	{
-		printf("Raw file is not Bayer raw10\n");
+		printf("Raw file is not Bayer raw10 or raw12\n");
 		goto unmap;
 	}
 	bayer_order = hdr->bayer_order;
+	bits_per_sample = hdr->bayer_format * 2 + 4;
+	max_val = ( 1 << bits_per_sample ) - 1;
 	width = hdr->width;
 	height = hdr->height;
 	single_channel_width = width/2;
@@ -295,8 +338,12 @@ int main(int argc, char *argv[])
 	block_sum = (uint32_t *)malloc(sizeof(uint32_t) * grid_width * grid_height);
 	printf("Grid size: %d x %d\n", grid_width, grid_height);
 
-	//Stride computed via same formula as the firmware uses.
-	stride = (((((width + hdr->padding_right)*5)+3)>>2) + 31)&(~31);
+	if (bits_per_sample == 10) {
+		//Stride computed via same formula as the firmware uses.
+		stride = (((((width + hdr->padding_right)*5)+3)>>2) + 31)&(~31);
+	} else {
+		stride = (((((width + hdr->padding_right)*6)+3)>>2) + 31)&(~31);
+	}
 
 	for (i=0; i<NUM_CHANNELS; i++)
 	{
@@ -321,30 +368,46 @@ int main(int argc, char *argv[])
 
 		uint16_t *chan_a_line = out_buf[chan_a] + ((y>>1)*single_channel_width);
 		uint16_t *chan_b_line = out_buf[chan_b] + ((y>>1)*single_channel_width);
-		for (x=0; x<width; x+=4)
-		{
-			uint8_t lsbs = line[4];
-			*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
-			chan_a_line++;
-			lsbs<<=2;
-			line++;
-			*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
-			chan_b_line++;
-			lsbs<<=2;
-			line++;
-			*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
-			chan_a_line++;
-			lsbs<<=2;
-			line++;
-			*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, (1<<10)-1);
-			chan_b_line++;
-			lsbs<<=2;
-			line++;
-			line++; //skip the LSBs
+		if (bits_per_sample == 10) {
+			for (x=0; x<width; x+=4)
+			{
+				uint8_t lsbs = line[4];
+				*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, max_val);
+				chan_a_line++;
+				lsbs<<=2;
+				line++;
+				*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, max_val);
+				chan_b_line++;
+				lsbs<<=2;
+				line++;
+				*(chan_a_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, max_val);
+				chan_a_line++;
+				lsbs<<=2;
+				line++;
+				*(chan_b_line) = black_level_correct(((*line)<<2) + (lsbs>>6), black_level, max_val);
+				chan_b_line++;
+				lsbs<<=2;
+				line++;
+				line++; //skip the LSBs
+			}
+		} else {
+			for (x=0; x<width; x+=4)
+			{
+				*(chan_a_line) = black_level_correct(((*line)<<4) + (line[ 2 ]>>4), black_level, max_val);
+				chan_a_line++;
+				line++;
+				*(chan_b_line) = black_level_correct(((*line)<<4) + (line[ 1 ]&0x0F), black_level, max_val);
+				chan_b_line++;
+				line+= 2;
+				*(chan_a_line) = black_level_correct(((*line)<<4) + (line[ 2 ]>>4), black_level, max_val);
+				chan_a_line++;
+				line++;
+				*(chan_b_line) = black_level_correct(((*line)<<4) + (line[ 1 ]&&0x0F), black_level, max_val);
+				chan_b_line++;
+				line+= 2;
+			}
 		}
 	}
-
-	printf("Save data. Bayer order is %d\n", bayer_order);
 
 	if (out_frmt&0x01)
 	{
@@ -383,7 +446,6 @@ int main(int argc, char *argv[])
 			out = fopen(filenames[i], "wb");
 			if (out)
 			{
-				printf("Saving %s data\n", filenames[i]);
 				fwrite(out_buf[i], (single_channel_width*single_channel_height)*sizeof(uint16_t), 1, out);
 				fclose(out);
 				out = NULL;
@@ -400,11 +462,11 @@ int main(int argc, char *argv[])
 			"Gr",
 			"Gb",
 			"B"
-		};	
-		
+		};
+
 		// Calculate sum for each block
 		uint16_t block_idx = 0;
-		uint32_t max_val = 0;
+		uint32_t max_blk_val = 0;
 		for (y=0; y<grid_height; y++)
 		{
 			int y_start = y*32+16-block_size/2;
@@ -426,9 +488,11 @@ int main(int argc, char *argv[])
 				uint32_t block_val = 0;
 				uint16_t block_px = 0;
 
-				for (int y_px = y_start; y_px < y_stop; y_px++){
+				for (int y_px = y_start; y_px < y_stop; y_px++)
+				{
 					line = &channel[y_px*(single_channel_width)];
-					for (int x_px = x_start; x_px < x_stop; x_px++){
+					for (int x_px = x_start; x_px < x_stop; x_px++)
+					{
 						block_val += line[x_px];
 						block_px++;
 					}
@@ -436,14 +500,13 @@ int main(int argc, char *argv[])
 				if (block_px < block_px_max)
 					block_val = block_val * block_px_max / block_px; // Scale sum in case of small edge blocks
 
-				block_sum[block_idx++] =  block_val;
-				if (block_val > max_val)
-					max_val = block_val;
+				block_sum[block_idx++] =  block_val ? block_val : 1;
+				if (block_val > max_blk_val)
+					max_blk_val = block_val;
 			}
 		}
 
-		max_val <<= 5;
-		printf("Max_val is %d\n", max_val);
+		max_blk_val <<= 5;
 		if (out_frmt&0x01)
 		{
 			fprintf(header, "//%s - Ch %d\n", channel_comments[i], channel_ordering[bayer_order][i]);
@@ -455,7 +518,7 @@ int main(int argc, char *argv[])
 		{
 			for (x=0; x<grid_width; x++)
 			{
-				int gain = max_val / block_sum[block_idx++] + 0.5;
+				int gain = max_blk_val / block_sum[block_idx++] + 0.5;
 				if (gain > 255)
 					gain = 255; //Clip as uint8_t
 				else if (gain < 32)
